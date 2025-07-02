@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Plot Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        #plot-img { margin-top: 20px; max-width: 600px; }
+    </style>
+</head>
+<body>
+    <h2>Select Device</h2>
+    <select id="device-select" onchange="updateImage()">
+        <option value="none">No devices</option>
+        <!-- Add more devices as needed -->
+    </select>
+    <div>
+        <img id="plot-img">
+    </div>
+    <script>
+        function updateImage() {
+        var device = document.getElementById("device-select").value;
+        if (!device || device === "none") {
+            document.getElementById("plot-img").src = "";
+            return;
+        }
+        fetch("/images", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify([device])
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.image_paths && data.image_paths.length > 0) {
+                document.getElementById("plot-img").src = data.image_paths[0];
+            } else {
+                document.getElementById("plot-img").src = "";
+            }
+        });
+        }
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch("/devices")
+                .then(response => response.json())
+                .then(data => {
+                    var select = document.getElementById("device-select");
+                    select.innerHTML = ""; // Clear any existing options
+                    if (data.devices && data.devices.length > 0) {
+                        data.devices.forEach(function(device, idx) {
+                            var option = document.createElement("option");
+                            option.value = device;
+                            option.text = device;
+                            select.appendChild(option);
+                        });
+                        // Set initial image
+                        document.getElementById("plot-img").src = "img/plot_" + data.devices[0] + ".png";
+                    } else {
+                        var option = document.createElement("option");
+                        option.text = "No devices found";
+                        select.appendChild(option);
+                        document.getElementById("plot-img").src = "";
+                    }
+                });
+        });
+    </script>
+</body>
+</html>
