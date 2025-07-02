@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from . models import SensorData
 from typing import Dict, List
-import sqlite3, json
+import sqlite3, json, urllib.parse
 from datetime import datetime
 from . analyze_data import create_plot_from_SensorData
 
@@ -71,11 +71,14 @@ async def read_index(request: Request):
 
 @app.post("/images")
 async def regenerate_images(device_names: List[str]):
-    
+    device_names = _parse_urls(device_names)
     all_data = _fetch_db_data()
     parsed_data = [_parse_sensor_row(row) for row in all_data]
     image_paths = create_plot_from_SensorData(parsed_data, device_names)
     return {"image_paths": image_paths}
+
+def _parse_urls(list):
+    return [urllib.parse.unquote(name) for name in list]
 
 def _parse_sensor_row(row):
     meta: Dict[str,str] = json.loads(row[1])      # JSON-merkkijono -> dict
