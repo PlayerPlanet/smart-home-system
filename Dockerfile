@@ -1,4 +1,15 @@
 FROM python:3.10-alpine
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    musl-dev \
+    linux-headers \
+    libffi-dev \
+    py3-numpy \
+    build-base \
+    lapack-dev \
+    blas-dev
+
 WORKDIR /code
 ENV FastAPI_APP=app.py
 ENV FastAPI_HOST=0.0.0.0

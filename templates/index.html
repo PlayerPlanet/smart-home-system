@@ -13,12 +13,14 @@
         <option value="none">No devices</option>
         <!-- Add more devices as needed -->
     </select>
+    <button onclick="calibrateDevices()">calibrate devices</button>
     <div>
         <img id="plot-img">
+        <img id="calibrate-img" src="img/distance_plot.png" alt="calibrate devices for the plot" />
     </div>
     <script>
-        function updateImage() {
-        var device = document.getElementById("device-select").value;
+        function updateImage(device = null) {
+        device = device ? device : document.getElementById("device-select").value;
         if (!device || device === "none") {
             document.getElementById("plot-img").src = "";
             return;
@@ -38,6 +40,9 @@
                 document.getElementById("plot-img").src = "";
             }
         });
+        }
+        function calibrateDevices() {
+        fetch("/calibrate")
         }
         document.addEventListener("DOMContentLoaded", function() {
             fetch("/devices")

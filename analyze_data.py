@@ -1,8 +1,10 @@
 import matplotlib.pyplot as plt
-from . models import SensorData
-from typing import List, Dict, Optional
+from . models import SensorData, Device
+from typing import List, Dict, Optional, Set, Tuple
 from datetime import datetime
 import matplotlib.dates as mdates
+import numpy as np
+from sklearn.manifold import MDS
 
 def create_plot_from_SensorData(
     all_sensor_data: List[SensorData], 
@@ -35,3 +37,24 @@ def create_plot_from_SensorData(
         plt.close()
         image_paths.append(output_dir + filename)
     return image_paths
+
+def update_distance_parameters(data: np.ndarray[float]):
+    distance_matrix = annuation_model(data)
+    mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42)
+    coords = mds.fit_transform(distance_matrix)
+    _save_plot_to_img(coords)
+    return "success!"
+
+def annuation_model(rssi,rssi_0=-30,N=2):
+    return 10 ** ((rssi_0-rssi)/10*N)
+
+def _save_plot_to_img(coords: np.ndarray):
+    fig = plt.figure()
+    ax = fig.add_subplot(11)
+    ax.scatter(coords[:, 0], coords[:, 1])
+    for i in range(len(coords)):
+        ax.text(coords[i, 0], coords[i, 1], f'Node {i+1}', fontsize=12)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    plt.savefig("img/distance_plot.png")
+    plt.close()
