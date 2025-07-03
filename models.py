@@ -6,5 +6,8 @@ class SensorData(BaseModel):
     results: Dict[str, float]
 
 class Device(BaseModel):
-    name: Optional[str]
+    name: Optional[str] = None
     mac: str
+
+    class Config:
+        frozen = True

@@ -50,7 +50,7 @@ def annuation_model(rssi,rssi_0=-30,N=2):
 
 def _save_plot_to_img(coords: np.ndarray):
     fig = plt.figure()
-    ax = fig.add_subplot(11)
+    ax = fig.add_subplot(111)
     ax.scatter(coords[:, 0], coords[:, 1])
     for i in range(len(coords)):
         ax.text(coords[i, 0], coords[i, 1], f'Node {i+1}', fontsize=12)

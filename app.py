@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.security import oauth2
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from . models import SensorData, Device
@@ -30,22 +30,77 @@ def _get_db():
 con, _ = _get_db()
 con.commit()
 
-#Known sensors:
-sensors: Set[Device] = set()
 #Calibration call:
-calibrate: str = ""
-calibrated_responses: Set[Device] = set()
-calibrated_devices: Set[Device] = set()
-rssi_results: np.ndarray = None
+class CalibrationManager:
+    def __init__(self):
+        self.sensors: Set[Device] = set()
+        self.calibrate: str = ""
+        self.calibrated_responses: Set[Device] = set()
+        self.calibrated_devices: Set[Device] = set()
+        self.rssi_results: np.ndarray = None
+
+    def add_sensor(self, device: Device):
+        if device not in self.sensors:
+            self.sensors.add(device)
+            self.rssi_results = np.zeros([len(self.sensors), len(self.sensors)])
+
+    def start(self):
+        if not self.sensors:
+            self.calibrate = ""
+        else:
+            self.calibrate = list(self.sensors)[0].mac
+
+    def stop(self):
+        self.calibrate = ""
+        self.calibrated_devices.clear()
+        self.calibrated_responses.clear()
+        self.sensors.clear()
+        if self.rssi_results is not None:
+            self.rssi_results = np.zeros_like(self.rssi_results)
+
+    def handle_response(self, sensor_data: SensorData):
+        mac = sensor_data.meta.get("mac")
+        if not mac:
+            return {"status": "Missing MAC address", "calibrate": self.calibrate}
+        new_device = Device(mac=mac)
+        self.calibrated_responses.add(new_device)
+        for target_mac, rssi in sensor_data.results.items():
+            target_device = Device(mac=target_mac)
+            if target_device in self.sensors:
+                i, j = (list(self.sensors).index(new_device), list(self.sensors).index(target_device))
+                avg_rssi = self.rssi_results[i][j]
+                self.rssi_results[i][j] = (avg_rssi + rssi) / 2
+
+        if self.calibrated_responses == self.sensors:
+            self.calibrated_responses.clear()
+            self.calibrated_devices.add(new_device)
+            devices_left = self.sensors.difference(self.calibrated_devices)
+            if devices_left:
+                next_device = list(devices_left)[0]
+                self.calibrate = next_device.mac
+                return {"status": f"{len(self.calibrated_devices)} / {len(self.sensors)}", "calibrate": self.calibrate}
+            else:
+                status = update_distance_parameters(self.rssi_results)
+                self.rssi_results = np.zeros_like(self.rssi_results)
+                self.calibrated_devices.clear()
+                self.calibrate = ""
+                return {"status": status}
+        else:
+            return {"status": f"{len(self.calibrated_devices)} / {len(self.sensors)}", "calibrate": self.calibrate}
+
+calibration = CalibrationManager()
+
 #TODO: add calibrate call added to return when UI sends get to certain endpoint
 @app.post("/data")
 async def handle_data(sensor_data: SensorData):
-    global calibrate
     if not sensor_data.meta or not sensor_data.results:
         raise HTTPException(status_code=400, detail="Invalid data format")
     else:
         status = _validate_data(sensor_data)
-        return {"status": status, "calibrate":calibrate}
+        mac = sensor_data.meta.get("mac")
+        if mac:
+            calibration.add_sensor(Device(mac=mac))
+        return {"status": status, "calibrate":calibration.calibrate}
 
 @app.get("/data/")
 async def load_data():
@@ -57,8 +112,14 @@ async def token_api():
     token = _create_OAuth_token()
     return {"Authorization":"Bearer","token": token}
 
+@app.get("/sensors")
+async def load_sensors():
+    macs = [sensor.mac for sensor in list(calibration.sensors)]
+    return {"sensors": macs}
+
 @app.get("/devices")
 async def load_devices():
+    res = []
     try:
         con, cur = _get_db()
         res = cur.execute("SELECT results FROM sensor_data").fetchall()
@@ -88,41 +149,24 @@ async def regenerate_images(device_names: List[str]):
 
 @app.post("/calibrate")
 async def calibrate_distance(sensor_data: SensorData):
-    global sensors, rssi_results, calibrated_devices, calibrated_responses, calibrate
-    mac = sensor_data.meta.get("mac")
-    if mac:
-        new_device = Device(mac=mac)
-        calibrated_responses.add(new_device) 
-    for target_mac, rssi in sensor_data.results.items():
-        new_target = Device(mac=target_mac)
-        if new_target in sensors:
-            i, j = (list(sensors).index(new_device),list(sensors).index(new_target))
-            target = new_target
-            avg_rssi = rssi_results[i][j]
-            rssi_results[i][j] = (avg_rssi+rssi)/2
-    if calibrated_responses == sensors:
-        calibrated_responses.clear()
-        calibrated_devices.add(target)
-        devices_left = sensors.difference(calibrated_devices)
-        if devices_left:
-            next_device = list(devices_left)[0]
-            return {"status": f"{len(calibrated_devices)} / {len(sensors)}","calibrate":next_device.mac}
-        else:
-            status = update_distance_parameters(rssi_results)
-            rssi_results.clear()
-            calibrated_devices.clear()
-            return{"status":status}
-    else:
-        return {"status": f"{len(calibrated_devices)} / {len(sensors)}","calibrate":calibrate}
-    
+   return calibration.handle_response(sensor_data)
+
 @app.get("/calibrate", response_class=RedirectResponse)
 async def start_calibration(request: Request):
-    global calibrate
-    if not sensors:
-        calibrate = "unknown"
-    else:
-        calibrate = list(sensors)[0].mac
+    calibration.start()
     return RedirectResponse("/", status_code=200)
+
+@app.get("/calibrate/stop")
+async def stop_calibration():
+    calibration.stop()
+    return {"status": "Calibration stopped", "calibrate": calibration.calibrate}
+
+@app.get("/settings")
+async def send_settings():
+    return FileResponse("templates/settings.json", media_type="application/json")
+
+
+
 
 
 #Helper functions#
@@ -144,10 +188,10 @@ def _validate_data(sensor_data: SensorData):
         current_time = datetime.now().strftime("%Y/%m/%d:%H:%M:%S")
         sensor_data.meta["time"] = current_time
         mac = sensor_data.meta.get("mac")
-        with Device(mac=mac) as new_device:
-            if mac and new_device not in sensors:
-                sensors.add(new_device) 
-                rssi_results = np.zeros([len(sensors),len(sensors)])
+        new_device = Device(mac=mac) 
+        if mac and new_device not in sensors:
+            sensors.add(new_device) 
+            rssi_results = np.zeros([len(sensors),len(sensors)])
         meta_str = json.dumps(sensor_data.meta)
         results_str = json.dumps(sensor_data.results)
         

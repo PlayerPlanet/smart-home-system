@@ -14,9 +14,16 @@
         <!-- Add more devices as needed -->
     </select>
     <button onclick="calibrateDevices()">calibrate devices</button>
+    <button onclick="calibrateDevices('/stop')">stop calibration</button>
     <div>
         <img id="plot-img">
         <img id="calibrate-img" src="img/distance_plot.png" alt="calibrate devices for the plot" />
+    </div>
+    <div>
+        <h3>List of active sensors</h3>
+        <ul id="sensor-list">
+            <p id="no-sensors">no sensors detected</p>
+        </ul>
     </div>
     <script>
         function updateImage(device = null) {
@@ -41,10 +48,10 @@
             }
         });
         }
-        function calibrateDevices() {
-        fetch("/calibrate")
+        function calibrateDevices(path = "") {
+        fetch("/calibrate"+path)
         }
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", async function() {
             fetch("/devices")
                 .then(response => response.json())
                 .then(data => {
@@ -66,6 +73,25 @@
                         document.getElementById("plot-img").src = "";
                     }
                 });
+            try {
+                const response = await fetch("/sensors");
+                const data = await response.json();
+                var li = document.getElementById("sensor-list")
+                var empty = document.getElementById("no-sensors")
+                if (data.sensors && data.sensors.length > 0) {
+                    li.innerHTML = "";
+                    data.sensors.forEach(function(sensor) {
+                        const element = document.createElement("li");
+                        element.textContent = sensor;
+                        li.appendChild(element);
+                    });
+                } else {
+                    li.innerHTML = "";
+                    li.appendChild(empty);
+                }
+            } catch (err) {
+                console.error("Failed to fetch")
+            }
         });
     </script>
 </body>
