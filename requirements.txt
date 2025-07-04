@@ -1,4 +1,6 @@
 fastapi[standard]
 matplotlib
 numpy
-scikit-learn
+scipy
+uvicorn
+scikit-image

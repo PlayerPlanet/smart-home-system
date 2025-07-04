@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
-from . models import SensorData, Device
+from .models import SensorData, Device
+from .rssi_models import base_model
 from typing import List, Dict, Optional, Set, Tuple
 from datetime import datetime
 import matplotlib.dates as mdates
 import numpy as np
-from sklearn.manifold import MDS
+from scipy.linalg import eigh
 
 def create_plot_from_SensorData(
     all_sensor_data: List[SensorData], 
@@ -38,15 +39,12 @@ def create_plot_from_SensorData(
         image_paths.append(output_dir + filename)
     return image_paths
 
-def update_distance_parameters(data: np.ndarray[float]):
-    distance_matrix = annuation_model(data)
-    mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42)
-    coords = mds.fit_transform(distance_matrix)
+def update_distance_parameters(data: np.ndarray[float])->str:
+    distance_matrix = base_model(data)
+    coords = MDS(distance_matrix)
     _save_plot_to_img(coords)
     return "success!"
 
-def annuation_model(rssi,rssi_0=-30,N=2):
-    return 10 ** ((rssi_0-rssi)/10*N)
 
 def _save_plot_to_img(coords: np.ndarray):
     fig = plt.figure()
@@ -58,3 +56,14 @@ def _save_plot_to_img(coords: np.ndarray):
     ax.set_ylabel('Y')
     plt.savefig("img/distance_plot.png")
     plt.close()
+
+def MDS(D, n_components=2):
+    # D: distance matrix (n_samples x n_samples)
+    n = D.shape[0]
+    H = np.eye(n) - np.ones((n, n)) / n
+    B = -0.5 * H @ (D ** 2) @ H
+    eigvals, eigvecs = eigh(B)
+    idx = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[idx][:n_components]
+    eigvecs = eigvecs[:, idx][:, :n_components]
+    return eigvecs * np.sqrt(eigvals)

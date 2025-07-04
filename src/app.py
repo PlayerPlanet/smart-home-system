@@ -1,18 +1,19 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.security import oauth2
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from . models import SensorData, Device
+from .models import SensorData, Device
 from typing import Dict, List, Set, Tuple
 import sqlite3, json, urllib.parse
 from datetime import datetime
-from . analyze_data import create_plot_from_SensorData, update_distance_parameters
+from .analyze_data import create_plot_from_SensorData, update_distance_parameters
 import numpy as np
+import os
 
 #fastapi app
 app = FastAPI()
-app.mount("/img", StaticFiles(directory="img"), name="img")
+app.mount("/static/", StaticFiles(directory="static/"), name="static")
 templates = Jinja2Templates(directory="templates")
 #sqlite3 db
 def _get_db():
@@ -90,6 +91,12 @@ class CalibrationManager:
 
 calibration = CalibrationManager()
 
+class SettingsManager:
+    def __init__(self):
+        self.new_settings: bool = False
+        self.settings_path: str = "templates/settings.json"
+        self.settings_format: type = json
+
 #TODO: add calibrate call added to return when UI sends get to certain endpoint
 @app.post("/data")
 async def handle_data(sensor_data: SensorData):
@@ -115,6 +122,8 @@ async def token_api():
 @app.get("/sensors")
 async def load_sensors():
     macs = [sensor.mac for sensor in list(calibration.sensors)]
+    if not macs and os.environ.get("TEST",True):
+        macs = ["first_sensor","second_sensor", "third_sensor"]
     return {"sensors": macs}
 
 @app.get("/devices")
@@ -139,6 +148,17 @@ async def load_devices():
 async def read_index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/floor", response_class=HTMLResponse)
+async def read_index(request: Request):
+    return templates.TemplateResponse("floorplan.html", {"request": request})
+@app.post("/floor")
+async def upload(image: UploadFile = File(...), metadata: UploadFile = File(...)):
+    metadata_dict = json.loads(await metadata.read())
+    
+    return {
+        "received_image": image.filename,
+        "metadata": metadata_dict
+    }
 @app.post("/images")
 async def regenerate_images(device_names: List[str]):
     device_names = _parse_urls(device_names)

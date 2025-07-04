@@ -11,11 +11,12 @@ RUN apk add --no-cache \
     blas-dev
 
 WORKDIR /code
-ENV FastAPI_APP=app.py
 ENV FastAPI_HOST=0.0.0.0
+ENV PORT=5000
+ENV TEST=true
 RUN apk add --no-cache gcc musl-dev linux-headers
 COPY requirements.txt ./requirements.txt
 RUN pip install -r ./requirements.txt
 EXPOSE 5000
 COPY . .
-CMD ["fastapi", "run", "app.py", "--port", "5000"]
+CMD uvicorn src.app:app --host $FastAPI_HOST --port $PORT

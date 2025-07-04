@@ -1,0 +1,6 @@
+.vscode*
+__pycache__*
+static/img*
+static/json*
+*.db
+templates/settings*
