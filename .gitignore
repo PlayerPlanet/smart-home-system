@@ -4,3 +4,4 @@ static/img/*
 static/json*
 *.db
 templates/settings*
+src/model_data/*

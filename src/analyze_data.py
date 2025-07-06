@@ -1,11 +1,14 @@
 import matplotlib.pyplot as plt
 from .models import SensorData, Device
 from .rssi_models import base_model
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Optional, Set, Tuple, BinaryIO
 from datetime import datetime
 import matplotlib.dates as mdates
 import numpy as np
 from scipy.linalg import eigh
+from skimage import io, color, filters, morphology
+from io import BytesIO
+from skimage.feature import canny
 
 def create_plot_from_SensorData(
     all_sensor_data: List[SensorData], 
@@ -46,7 +49,7 @@ def update_distance_parameters(data: np.ndarray[float])->str:
     return "success!"
 
 
-def _save_plot_to_img(coords: np.ndarray):
+def _save_plot_to_img(coords: np.ndarray, name: str = "distance_plot"):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.scatter(coords[:, 0], coords[:, 1])
@@ -67,3 +70,45 @@ def MDS(D, n_components=2):
     eigvals = eigvals[idx][:n_components]
     eigvecs = eigvecs[:, idx][:, :n_components]
     return eigvecs * np.sqrt(eigvals)
+
+def create_img_mask(image: str | bytes, cleaned = True) -> np.ndarray:
+    """create mask using otsu threshold. if cleaned = True, returns morphology-cleaned mask"""
+    if type(image) == str:
+        image = io.imread(str)
+    elif type(image) == bytes: 
+        image = io.imread(BytesIO(image))
+    else:
+        raise TypeError
+    if image.shape[-1] == 4:
+        image = image[:, :, :3]
+    gray = color.rgb2gray(image)
+    thresh = filters.threshold_otsu(gray)
+    binary_mask = gray > thresh
+    if cleaned: 
+        cleaned_mask = morphology.binary_closing(binary_mask, morphology.disk(2))
+        cleaned = morphology.remove_small_objects(cleaned_mask, min_size=300)
+        cleaned = morphology.binary_opening(cleaned_mask, morphology.disk(2))
+        return cleaned_mask.astype(np.uint8)
+    else:
+        return binary_mask.astype(np.uint8)
+
+def create_canny_img_mask(image: str | bytes) -> np.ndarray:
+    """create mask using canny edge-detection"""
+    if type(image) == str:
+        image = io.imread(str)
+    elif type(image) == bytes: 
+        image = io.imread(BytesIO(image))
+    else:
+        raise TypeError
+    if image.shape[-1] == 4:
+        image = image[:, :, :3]
+    gray = color.rgb2gray(image)
+    edges = canny(gray, sigma=2)
+    
+    return edges.astype(np.uint8)
+
+def save_heatmap_to_png(data: np.ndarray, name: str):
+    plt.imshow(data, cmap='hot')
+    plt.title("heatmap")
+    plt.axis('off')
+    plt.savefig(f"static/img/{name}.png")

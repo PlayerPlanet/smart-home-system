@@ -17,7 +17,10 @@ let clickCount = 0;
 let tempMeasurePoints = [];
 let measurementLines = [];
 let sensors = [];
+let sensor_positions = new Object();
 let selectedSensor = null;
+//serverside functionalties:
+//load sensors and update sensorlist
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch('/sensors');
@@ -29,6 +32,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Failed to fetch sensors:', e);
     }
 });
+// Save sensor positions and scale
+document.getElementById("save-sensors").addEventListener("click", async function() {
+    const imageFile = uploadInput.files[0]
+    if (!imageFile) {
+        alert("No floorplan image file selected.");
+        return;
+    }
+    if (!scale) {
+        alert("Please define the scale.");
+        return;
+    }
+    if (Object.keys(sensors).length === 0) {
+        alert("Please place at least one sensor.");
+        return;
+    }
+    // Prepare data
+    const data = {
+        sensor_positions: sensor_positions,
+        scale: scale
+    };
+    const formData = new FormData();
+    formData.append("image",imageFile, "floorplan.png");
+    formData.append("metadata", JSON.stringify(data));
+    // Send POST to /floorplan
+    const resp = await fetch("/floor", {
+        method: "POST",
+        body: formData
+    });
+    if (resp.ok) {
+        alert("Floorplan and sensor positions saved!");
+    } else {
+        alert("Failed to save floorplan data.");
+    }
+});
+//Display uploaded file automatically:
 const uploadInput = document.querySelector('input[type="file"][name="floorplan"]');
 uploadInput.addEventListener("change", function(e) {
     const file = e.target.files[0];
@@ -44,6 +82,8 @@ uploadInput.addEventListener("change", function(e) {
         reader.readAsDataURL(file);
     }
     });
+
+//clicks: 
 document.getElementById('measureBtn').onclick = () => {
     isCalibrating = true;
     isMeasuring = false;
@@ -82,13 +122,6 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
-document.getElementById('save-sensors').addEventListener('click', () => {
-    fetch('/save_sensors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sensors)
-    }).then(res => alert('Sensors saved.')).catch(err => alert('Failed to save.'));
-});
 
 function handleCalibrationClick(x, y) {
     if (clickCount === 0) {
@@ -125,23 +158,7 @@ function handleMeasurementClick(x, y) {
     }
 }
 
-function movePoint(el, x, y) {
-    console.log("Moving point to", x, y);
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-}
-
-function getPointPos(el) {
-    return {
-        x: parseFloat(el.style.left),
-        y: parseFloat(el.style.top)
-    };
-}
-
-function pixelDistance(p1, p2) {
-    return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-}
-
+//drawing on the canvas:
 function drawFloorplan() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(floorplanImg, 0, 0);
@@ -180,21 +197,26 @@ function drawLine(p1, p2, isCalibration) {
     }
 }
 
+
+//sensors:
 function addSensor(x, y) {
     const activeLi = sensorList.querySelector('li.active');
 
     if (activeLi) {
         const index = [...sensorList.children].indexOf(activeLi);
         if (index >= 0 && index < sensors.length) {
-            sensors[index] = { x, y };
-            activeLi.textContent = `Sensor ${index + 1}: (${x.toFixed(1)}, ${y.toFixed(1)})`;
+            const name = sensors[index]
+            sensor_positions[name] = { x, y };
+            console.log("saved: ",sensor_positions.name)
+            activeLi.textContent = `${name}: (${x.toFixed(1)}, ${y.toFixed(1)})`;
         }
     } else {
         // Add new sensor
-        sensors.push({ x, y });
+        sensors.push("new_sensor")
+        sensor_positions.new_sensor = { x, y };
+        drawFloorplan();
     }
 
-    drawFloorplan();
 }
 
 function updateSensorList() {
@@ -206,11 +228,10 @@ function updateSensorList() {
     } else {
         sensors.forEach((sensor, i) => {
             const li = document.createElement("li");
-            li.textContent = `Sensor ${i + 1}: (${sensor.x?.toFixed(1) ?? 'N/A'}, ${sensor.y?.toFixed(1) ?? 'N/A'})`;
+            li.textContent = `${sensor}: (${sensor_positions[sensor]?.x.toFixed(1) ?? 'N/A'}, ${sensor_positions[sensor]?.y.toFixed(1) ?? 'N/A'})`;
             li.addEventListener("click", () => {
                 Array.from(sensorList.children).forEach(child => child.classList.remove("active"));
                 li.classList.add("active");
-                selectedSensor = sensor;
                 isMeasuring = false;
                 isCalibrating = false;
                 isPlacingSensor = true;
@@ -220,6 +241,7 @@ function updateSensorList() {
     }
 }
 
+//helper-functions for measurement-handling:
 [point1, point2].forEach(point => {
     let isDragging = false;
     point.addEventListener('mousedown', () => isDragging = true);
@@ -233,3 +255,20 @@ function updateSensorList() {
         drawFloorplan();
     });
 });
+
+function movePoint(el, x, y) {
+    console.log("Moving point to", x, y);
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+}
+
+function getPointPos(el) {
+    return {
+        x: parseFloat(el.style.left),
+        y: parseFloat(el.style.top)
+    };
+}
+
+function pixelDistance(p1, p2) {
+    return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+}

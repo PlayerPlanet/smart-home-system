@@ -1,13 +1,14 @@
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.security import oauth2
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from .models import SensorData, Device
-from typing import Dict, List, Set, Tuple
+from .rssi_models import FloorModel, simulate_wave_heatmap
+from typing import Dict, List, Set, Tuple, BinaryIO
 import sqlite3, json, urllib.parse
 from datetime import datetime
-from .analyze_data import create_plot_from_SensorData, update_distance_parameters
+from .analyze_data import create_plot_from_SensorData, update_distance_parameters, create_img_mask, create_canny_img_mask, save_heatmap_to_png
 import numpy as np
 import os
 
@@ -90,7 +91,6 @@ class CalibrationManager:
             return {"status": f"{len(self.calibrated_devices)} / {len(self.sensors)}", "calibrate": self.calibrate}
 
 calibration = CalibrationManager()
-
 class SettingsManager:
     def __init__(self):
         self.new_settings: bool = False
@@ -151,14 +151,18 @@ async def read_index(request: Request):
 @app.get("/floor", response_class=HTMLResponse)
 async def read_index(request: Request):
     return templates.TemplateResponse("floorplan.html", {"request": request})
+
 @app.post("/floor")
-async def upload(image: UploadFile = File(...), metadata: UploadFile = File(...)):
-    metadata_dict = json.loads(await metadata.read())
-    
+async def upload(image: UploadFile = File(...), metadata: str = Form(...)):
+    floor_img_path = os.path.join("static/img/",image.filename)
+    imageFile = await image.read()
+    metadata_dict = json.loads(metadata)
+    output = _handle_floorplan(floor_img_path,metadata_dict, imageFile)
     return {
-        "received_image": image.filename,
+        "received_image": floor_img_path,
         "metadata": metadata_dict
     }
+
 @app.post("/images")
 async def regenerate_images(device_names: List[str]):
     device_names = _parse_urls(device_names)
@@ -225,6 +229,28 @@ def _validate_data(sensor_data: SensorData):
     finally:
         con.close()
         return "success"
+    
+def _handle_floorplan(floor_img_path: str, metadata_dict, imageFile: BinaryIO):
+    basepath = os.path.dirname(__file__)
+    floor_model_path = os.path.join(basepath, "model_data/")
+    scale = metadata_dict['scale']
+    sensor_positions = metadata_dict['sensor_positions']
+    sensor_positions_formated: Dict[str, Tuple[float,float]] = {
+        key: (float(value['x'])*scale, float(value['y'])*scale)
+        for key, value in sensor_positions.items()
+    }
+    with open(floor_img_path,"wb") as file:
+        n = file.write(imageFile)
+    mask = create_img_mask(imageFile)
+    floor_model = FloorModel(mask, scale, sensor_positions_formated, floor_img_path)
+    floor_model.save(floor_model_path)
+    for sensor_name, sensor_pos_m in floor_model.sensor_positions_m.items():
+        sensor_pos = tuple(map(float, sensor_pos_m))
+        energy = simulate_wave_heatmap(sensor_pos, mask, scale,2000, damping=0.0001)
+        log_energy = np.log10(energy + 1e-10)  # Avoid log(0)
+        log_energy = (log_energy - log_energy.min()) / (log_energy.max() - log_energy.min())
+        save_heatmap_to_png(log_energy, "heatmap"+sensor_name+datetime.strftime(datetime.now(), "%Y-%m-%d-%H-%M"))
+    return None
 
 def _fetch_db_data():
     try:
