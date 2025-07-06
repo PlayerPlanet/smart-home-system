@@ -2,6 +2,11 @@ import numpy as np
 from typing import Dict, Tuple
 import matplotlib.pyplot as plt
 import math
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
+
 def base_model(rssi,rssi_0=-30,N=2):
     return 10 ** ((rssi_0-rssi)/10*N)
 
@@ -203,6 +208,8 @@ def simulate_wave_heatmap(sensor_pos_m: Tuple[float, float],
     for step in range(num_steps):
         # Compute Laplacian
         # Add a few cycles of oscillation at the source to inject real energy
+        if step % 100 == 0:
+            logger.info(f"Wave simulation step {step}/{num_steps}")
         if step < pulse_duration:
             u_curr[sy, sx] += np.sin(2 * np.pi * pulse_freq * step * dt) * np.exp(-((step - pulse_center) ** 2) / (2 * sigma ** 2))
         lap = laplace(u_curr, mode='constant', cval=0.0)
