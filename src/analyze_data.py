@@ -10,7 +10,7 @@ from scipy.linalg import eigh
 def create_plot_from_SensorData(
     all_sensor_data: List[SensorData], 
     selected_keys: Optional[List[str]] = None,
-    output_dir: str = "img/"
+    output_dir: str = "static/img/"
 ) -> List[str]:
     devices: Dict[str, Dict[str, List[tuple]]] = {}
     for sensor_data in all_sensor_data:
@@ -54,7 +54,7 @@ def _save_plot_to_img(coords: np.ndarray):
         ax.text(coords[i, 0], coords[i, 1], f'Node {i+1}', fontsize=12)
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
-    plt.savefig("img/distance_plot.png")
+    plt.savefig("static/img/distance_plot.png")
     plt.close()
 
 def MDS(D, n_components=2):

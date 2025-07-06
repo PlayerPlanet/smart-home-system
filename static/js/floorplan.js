@@ -1,146 +1,235 @@
-document.addEventListener("DOMContentLoaded", async function() {
-    // Fetch sensors and populate list
-    const sensorList = document.getElementById("sensor-list");
-    let sensors = [];
-    let selectedSensor = null;
-    let sensorPositions = {};
+// floorplan.js — merged and extended version
 
-    async function fetchSensors() {
-        try {
-            const response = await fetch("/sensors");
-            const data = await response.json();
-            sensors = data.sensors || [];
-            sensorList.innerHTML = "";
-            if (sensors.length === 0) {
-                const li = document.createElement("li");
-                li.textContent = "No sensors detected";
-                sensorList.appendChild(li);
-            } else {
-                sensors.forEach(sensor => {
-                    const li = document.createElement("li");
-                    li.textContent = sensor;
-                    li.addEventListener("click", () => {
-                        Array.from(sensorList.children).forEach(child => child.classList.remove("active"));
-                        li.classList.add("active");
-                        selectedSensor = sensor;
-                        showCrosshair();
-                    });
-                    sensorList.appendChild(li);
-                });
-            }
-        } catch (err) {
-            sensorList.innerHTML = "<li>Failed to fetch sensors</li>";
+const canvas = document.getElementById('floorplan-img');
+const ctx = canvas.getContext('2d');
+const point1 = document.getElementById('point1');
+const point2 = document.getElementById('point2');
+const scaleText = document.getElementById('scaleText');
+const sensorList = document.getElementById('sensor-list');
+const saveBtn = document.getElementById('save-sensors');
+
+let floorplanImg = new Image();
+let scale = null;
+let isCalibrating = false;
+let isMeasuring = false;
+let isPlacingSensor = false;
+let clickCount = 0;
+let tempMeasurePoints = [];
+let measurementLines = [];
+let sensors = [];
+let selectedSensor = null;
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await fetch('/sensors');
+        const data = await res.json();
+        sensors = data.sensors;
+        updateSensorList();
+        drawFloorplan();
+    } catch (e) {
+        console.error('Failed to fetch sensors:', e);
+    }
+});
+const uploadInput = document.querySelector('input[type="file"][name="floorplan"]');
+uploadInput.addEventListener("change", function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            floorplanImg.src = ev.target.result;
+            canvas.width = floorplanImg.width;
+            canvas.height = floorplanImg.height;
+            canvas.style.display = "block";
+            drawFloorplan()
+        };
+        reader.readAsDataURL(file);
+    }
+    });
+document.getElementById('measureBtn').onclick = () => {
+    isCalibrating = true;
+    isMeasuring = false;
+    isPlacingSensor = false;
+    clickCount = 0;
+    tempMeasurePoints = [];
+    point1.style.display = 'none';
+    point2.style.display = 'none';
+    drawFloorplan();
+};
+
+document.getElementById('newMeasureBtn').onclick = () => {
+    if (scale === null) {
+        alert("Please define the scale first.");
+        return;
+    }
+    isMeasuring = true;
+    isCalibrating = false;
+    isPlacingSensor = false;
+    clickCount = 0;
+    tempMeasurePoints = [];
+    drawFloorplan();
+};
+
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (isCalibrating) {
+        handleCalibrationClick(x, y);
+    } else if (isMeasuring) {
+        handleMeasurementClick(x, y);
+    } else if (isPlacingSensor) {
+        addSensor(x, y);
+    }
+});
+
+document.getElementById('save-sensors').addEventListener('click', () => {
+    fetch('/save_sensors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sensors)
+    }).then(res => alert('Sensors saved.')).catch(err => alert('Failed to save.'));
+});
+
+function handleCalibrationClick(x, y) {
+    if (clickCount === 0) {
+        movePoint(point1, x, y);
+        point1.style.display = 'block';
+        clickCount++;
+    } else if (clickCount === 1) {
+        movePoint(point2, x, y);
+        point2.style.display = 'block';
+
+        const distance = prompt('Enter the real-world distance between points (in meters):');
+        if (!isNaN(distance) && distance > 0) {
+            const pxDist = pixelDistance(getPointPos(point1), getPointPos(point2));
+            scale = parseFloat(distance) / pxDist;
+            scaleText.textContent = scale.toFixed(5) + ' m/pixel';
         }
+        
+        isCalibrating = false;
+    }
+    console.log("Clicked calibration", clickCount, x, y);
+    drawFloorplan();
+}
+
+function handleMeasurementClick(x, y) {
+    tempMeasurePoints.push({ x, y });
+    if (tempMeasurePoints.length === 2) {
+        measurementLines.push({
+            p1: { ...tempMeasurePoints[0] },
+            p2: { ...tempMeasurePoints[1] },
+            id: Date.now()
+        });
+        tempMeasurePoints = [];
+        drawFloorplan();
+    }
+}
+
+function movePoint(el, x, y) {
+    console.log("Moving point to", x, y);
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+}
+
+function getPointPos(el) {
+    return {
+        x: parseFloat(el.style.left),
+        y: parseFloat(el.style.top)
+    };
+}
+
+function pixelDistance(p1, p2) {
+    return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+}
+
+function drawFloorplan() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(floorplanImg, 0, 0);
+
+    if (point1.style.display === 'block' && point2.style.display === 'block') {
+        drawLine(getPointPos(point1), getPointPos(point2), true);
     }
 
-    await fetchSensors();
+    measurementLines.forEach(line => drawLine(line.p1, line.p2, false));
 
-    // Handle floorplan image preview on file upload
-    const uploadInput = document.querySelector('input[type="file"][name="floorplan"]');
-    const floorplanImg = document.getElementById("floorplan-img");
-    const floorplanContainer = document.getElementById("floorplan-container");
-
-    uploadInput.addEventListener("change", function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(ev) {
-                floorplanImg.src = ev.target.result;
-                floorplanImg.style.display = "block";
-            };
-            reader.readAsDataURL(file);
-        }
+    sensors.forEach(sensor => {
+        ctx.beginPath();
+        ctx.arc(sensor.x, sensor.y, 8, 0, 2 * Math.PI);
+        ctx.fillStyle = 'red';
+        ctx.fill();
     });
 
-    // Crosshair and sensor placement
-    let crosshair = null;
-    function showCrosshair() {
-        if (!crosshair) {
-            crosshair = document.createElement("div");
-            crosshair.className = "crosshair";
-            floorplanContainer.appendChild(crosshair);
+    updateSensorList();
+    saveBtn.style.display = sensors.length > 0 ? 'inline-block' : 'none';
+}
+
+function drawLine(p1, p2, isCalibration) {
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.strokeStyle = isCalibration ? 'red' : 'blue';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (scale !== null) {
+        const px = pixelDistance(p1, p2);
+        const meters = px * scale;
+        ctx.fillStyle = 'black';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(meters.toFixed(2) + ' m', (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 10);
+    }
+}
+
+function addSensor(x, y) {
+    const activeLi = sensorList.querySelector('li.active');
+
+    if (activeLi) {
+        const index = [...sensorList.children].indexOf(activeLi);
+        if (index >= 0 && index < sensors.length) {
+            sensors[index] = { x, y };
+            activeLi.textContent = `Sensor ${index + 1}: (${x.toFixed(1)}, ${y.toFixed(1)})`;
         }
-        crosshair.style.display = selectedSensor ? "block" : "none";
+    } else {
+        // Add new sensor
+        sensors.push({ x, y });
     }
 
-    floorplanImg.addEventListener("click", function(e) {
-        if (!selectedSensor) return;
-        const rect = floorplanImg.getBoundingClientRect();
+    drawFloorplan();
+}
+
+function updateSensorList() {
+    sensorList.innerHTML = "";
+    if (sensors.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "No sensors detected";
+        sensorList.appendChild(li);
+    } else {
+        sensors.forEach((sensor, i) => {
+            const li = document.createElement("li");
+            li.textContent = `Sensor ${i + 1}: (${sensor.x?.toFixed(1) ?? 'N/A'}, ${sensor.y?.toFixed(1) ?? 'N/A'})`;
+            li.addEventListener("click", () => {
+                Array.from(sensorList.children).forEach(child => child.classList.remove("active"));
+                li.classList.add("active");
+                selectedSensor = sensor;
+                isMeasuring = false;
+                isCalibrating = false;
+                isPlacingSensor = true;
+            });
+            sensorList.appendChild(li);
+        });
+    }
+}
+
+[point1, point2].forEach(point => {
+    let isDragging = false;
+    point.addEventListener('mousedown', () => isDragging = true);
+    document.addEventListener('mouseup', () => isDragging = false);
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-
-        // Place dot
-        let dot = document.querySelector(`.sensor-dot[data-sensor="${selectedSensor}"]`);
-        if (!dot) {
-            dot = document.createElement("div");
-            dot.className = "sensor-dot";
-            dot.dataset.sensor = selectedSensor;
-            floorplanContainer.appendChild(dot);
-        }
-        dot.style.left = `${x}px`;
-        dot.style.top = `${y}px`;
-
-        // Move crosshair to this position
-        if (crosshair) {
-            crosshair.style.left = `${x}px`;
-            crosshair.style.top = `${y}px`;
-        }
-
-        // Save position
-        sensorPositions[selectedSensor] = { x, y };
-        document.getElementById("save-sensors").style.display = "block";
-    });
-
-    // Save sensor positions and scale
-    document.getElementById("save-sensors").addEventListener("click", async function() {
-        const scalePixels = parseFloat(document.getElementById("scale-pixels").value);
-        const scaleMeters = parseFloat(document.getElementById("scale-meters").value);
-        if (!scalePixels || !scaleMeters) {
-            alert("Please define the scale.");
-            return;
-        }
-        if (Object.keys(sensorPositions).length === 0) {
-            alert("Please place at least one sensor.");
-            return;
-        }
-        // Prepare data
-        const data = {
-            sensor_positions: sensorPositions,
-            scale: { pixels: scalePixels, meters: scaleMeters }
-        };
-        const formData = new FormData();
-        formData.append("image",floorplanImg);
-        formData.append("metadata", new Blob(
-        [JSON.stringify(data)],
-        { type: "application/json" }
-        ));
-        // Send POST to /floorplan
-        const resp = await fetch("/floor", {
-            method: "POST",
-            body: formData
-        });
-        if (resp.ok) {
-            alert("Floorplan and sensor positions saved!");
-        } else {
-            alert("Failed to save floorplan data.");
-        }
-    });
-
-    // Form submit: upload floorplan image to backend
-    document.getElementById("upload-form").addEventListener("submit", async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const resp = await fetch("/floor", {
-            method: "POST",
-            body: formData
-        });
-        if (resp.ok) {
-            const data = await resp.json();
-            if (data.floorplan_url) {
-                floorplanImg.src = data.floorplan_url;
-            }
-        } else {
-            alert("Failed to upload floorplan image.");
-        }
+        movePoint(point, x, y);
+        drawFloorplan();
     });
 });

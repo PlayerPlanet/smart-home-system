@@ -5,7 +5,7 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
         #floorplan-container { margin-top: 20px; position: relative; }
-        #floorplan-img { max-width: 600px; border: 1px solid #ccc; }
+        #floorplan-img {border: 1px solid #ccc; }
         .sensor-dot {
             position: absolute;
             width: 16px;
@@ -15,26 +15,22 @@
             transform: translate(-50%, -50%);
             pointer-events: none;
         }
-        .crosshair {
+        .draggable-point {
             position: absolute;
-            width: 20px;
-            height: 20px;
-            pointer-events: none;
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
             z-index: 10;
-        }
-        .crosshair:before, .crosshair:after {
-            content: '';
-            position: absolute;
-            background: #00f;
-        }
-        .crosshair:before {
-            left: 9px; top: 0; width: 2px; height: 20px;
-        }
-        .crosshair:after {
-            top: 9px; left: 0; width: 20px; height: 2px;
         }
         #sensor-list li.active {
             background: #e0e0ff;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
         }
     </style>
 </head>
@@ -53,14 +49,15 @@
     <div>
         <label>
             Define scale: 
-            <input type="number" id="scale-pixels" min="1" placeholder="pixels" style="width:60px;">
-            pixels =
-            <input type="number" id="scale-meters" min="0.01" step="0.01" placeholder="meters" style="width:60px;">
-            meters
+            <div id="info">Pixel-to-meter ratio: <span id="scaleText">N/A</span></div>
         </label>
+        <button id="newMeasureBtn">Start Measuring</button>
+        <button id="measureBtn">Set distance</button>
     </div>
     <div id="floorplan-container">
-        <img id="floorplan-img" src="" alt="Floorplan will appear here" />
+        <canvas id="floorplan-img" src="" alt="Floorplan will appear here"></canvas>
+        <div id="point1" class="draggable-point" style="display: none;"></div>
+        <div id="point2" class="draggable-point" style="display: none;"></div>
         <!-- Sensor dots and crosshair will be dynamically added here -->
     </div>
     <button id="save-sensors" style="display:none;">Save Sensor Positions</button>
