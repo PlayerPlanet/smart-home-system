@@ -3,12 +3,12 @@ from fastapi.security import oauth2
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from .models import SensorData, Device
+from .models import SensorData, Device, Rating
 from .rssi_models import FloorModel, simulate_wave_heatmap
 from typing import Dict, List, Set, Tuple, BinaryIO
 import sqlite3, json, urllib.parse
 from datetime import datetime
-from .analyze_data import create_plot_from_SensorData, update_distance_parameters, create_img_mask, create_canny_img_mask, save_heatmap_to_png
+from .analyze_data import create_plot_from_SensorData, update_distance_parameters, create_img_mask, save_heatmap_to_png, target_heuristic
 import numpy as np
 import os
 
@@ -82,6 +82,7 @@ class CalibrationManager:
                 self.calibrate = next_device.mac
                 return {"status": f"{len(self.calibrated_devices)} / {len(self.sensors)}", "calibrate": self.calibrate}
             else:
+                np.save("/model_data/calibration_results.npy",self.rssi_results)
                 status = update_distance_parameters(self.rssi_results)
                 self.rssi_results = np.zeros_like(self.rssi_results)
                 self.calibrated_devices.clear()
@@ -142,7 +143,11 @@ async def load_devices():
             device_names.update(results.keys())
         except Exception:
             continue
-    return {"devices": list(device_names)}
+    all_data = _fetch_db_data()
+    parsed_data = [_parse_sensor_row(row) for row in all_data]
+    rank = target_heuristic(parsed_data, 5, device_names)
+    sorted_devices = sorted(device_names, key=lambda mac: rank.get(mac, 0.0), reverse=True)
+    return {"devices": sorted_devices}
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request):
@@ -169,7 +174,8 @@ async def regenerate_images(device_names: List[str]):
     all_data = _fetch_db_data()
     parsed_data = [_parse_sensor_row(row) for row in all_data]
     image_paths = create_plot_from_SensorData(parsed_data, device_names)
-    return {"image_paths": image_paths}
+    rank = target_heuristic(parsed_data, 5, device_names)
+    return {"image_paths": image_paths, "rank":rank}
 
 @app.post("/calibrate")
 async def calibrate_distance(sensor_data: SensorData):
@@ -189,8 +195,18 @@ async def stop_calibration():
 async def send_settings():
     return FileResponse("templates/settings.json", media_type="application/json")
 
+@app.post("/rate")
+async def rate_device(rating: Rating):
+    # You can write this to DB, CSV, or just print for now
+    basepath = os.path.dirname(__file__)
+    file_path = os.path.join(basepath, "model_data/ratings_log.json")
+    with open(file_path, "a") as f:
+        f.write(rating.model_dump_json() + "\n")
+    return {"status": "ok"}
 
-
+@app.get("/rate", response_class=HTMLResponse)
+async def read_index(request: Request):
+    return templates.TemplateResponse("rate_devices.html", {"request": request})
 
 
 #Helper functions#

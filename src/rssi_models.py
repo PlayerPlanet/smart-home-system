@@ -1,17 +1,42 @@
 import numpy as np
-from typing import Dict, Tuple
+from typing import Dict, Tuple,List
 import matplotlib.pyplot as plt
+from scipy.linalg import lstsq, solve, qr
 import math
 import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-def base_model(rssi,rssi_0=-30,N=2):
+def base_model(rssi,rssi_0=-54.4,N=2.305):
     return 10 ** ((rssi_0-rssi)/10*N)
 
 def rssi_from_distance(d, rssi_0=-30,N=2):
     return rssi_0-10*N*np.log10(d)
+
+def plot_model(model= base_model):
+    x = np.linspace(0, 10,500)
+    y = model(x)
+    plt.plot(x,y)
+    plt.title("Current model params")
+    plt.show()
+    return "success!"
+
+def base_target_model(sensor_positions_m: np.ndarray, rssi_values: np.ndarray)-> np.ndarray:
+    """Solves SVD-least-squares. Returns target coordinates for rssi values using defined sensor positions"""
+    A = sensor_positions_m
+    b = base_model(rssi_values)
+    x = lstsq(A,b)
+    return x
+
+def qr_target_model(sensor_positions_m: np.ndarray, rssi_values: np.ndarray)-> np.ndarray:
+    """Solves QR-least-squares. Returns target coordinates for rssi values using defined sensor positions"""
+    A = sensor_positions_m
+    b = base_model(rssi_values)
+    q, r = qr(A)
+    b = q.transpose() @ b
+    x = solve(r, b)
+    return x
 
 class FloorModel:
     def __init__(self,
@@ -50,6 +75,15 @@ class FloorModel:
         import os
         np.save(os.path.join(folder, "mask.npy"), self.mask)
         np.save(os.path.join(folder, "sensor_positions_m.npy"), self.sensor_positions_m)
+        rows = []
+        for _, row in self.sensor_positions_m.items():
+            rows.append(row)
+        A = np.array(rows)
+        G = A @ A.T                       # Gram matrix (n x n)
+        sq_norms = np.sum(A**2, axis=1)  # shape (n,)
+        distance_matrix: np.ndarray = sq_norms[:, None] + sq_norms[None, :] - 2 * G
+        distance_matrix = np.sqrt(distance_matrix)
+        np.save(os.path.join(folder, "distance_matrix.npy"), distance_matrix)
         with open(os.path.join(folder, "scale.txt"), 'w') as f:
             f.write(str(self.scale))
         if self.image_path:

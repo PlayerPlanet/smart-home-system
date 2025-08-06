@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rate Device Plots</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        #plot-img { margin-top: 20px; max-width: 600px; }
+        .rating-container {
+            margin-top: 20px;
+        }
+        .slider-label {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Rate Device Plots</h2>
+    <p id="progress">Loading devices...</p>
+    <img id="plot-img" src="" alt="Device Plot" />
+    <div class="rating-container">
+        <div class="slider-label">Rate this device:</div>
+        <input type="range" min="0" max="100" value="50" id="rating-slider">
+        <span id="slider-value">0.50</span>
+    </div>
+
+    <script>
+        let devices = [];
+        let currentIndex = 0;
+
+        async function fetchDevices() {
+            const response = await fetch("/devices");
+            const data = await response.json();
+            devices = data.devices || [];
+            currentIndex = 0;
+            if (devices.length > 0) {
+                loadDevice(devices[currentIndex]);
+            } else {
+                document.getElementById("progress").textContent = "No devices found.";
+            }
+        }
+
+        function loadDevice(device) {
+            document.getElementById("progress").textContent = `Device ${currentIndex + 1} / ${devices.length}: ${device}`;
+            fetch("/images", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify([device])
+            })
+            .then(response => response.json())
+            .then(data => {
+                const imageUrl = data.image_paths && data.image_paths[0];
+                document.getElementById("plot-img").src = imageUrl || "";
+            });
+        }
+
+        function sendRating(device, rating) {
+            fetch("/rate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ device: device, rating: rating })
+            });
+        }
+
+        function goToNext() {
+            currentIndex += 1;
+            if (currentIndex < devices.length) {
+                document.getElementById("rating-slider").value = 50;
+                document.getElementById("slider-value").textContent = "0.50";
+                loadDevice(devices[currentIndex]);
+            } else {
+                window.location.href = "/";
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const slider = document.getElementById("rating-slider");
+            const sliderValue = document.getElementById("slider-value");
+
+            slider.addEventListener("input", () => {
+                sliderValue.textContent = (slider.value / 100).toFixed(2);
+            });
+
+            slider.addEventListener("change", () => {
+                const rating = parseFloat(slider.value) / 100;
+                const device = devices[currentIndex];
+                sendRating(device, rating);
+                setTimeout(goToNext, 300);  // small delay for UX
+            });
+
+            fetchDevices();
+        });
+    </script>
+</body>
+</html>

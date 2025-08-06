@@ -15,7 +15,9 @@
     </select>
     <button onclick="calibrateDevices()">calibrate devices</button>
     <button onclick="calibrateDevices('/stop')">stop calibration</button>
+    <a href="/floor"><button>Set sensor positions</button></a>
     <div>
+        <p id="target_heuristic"></p>
         <img id="plot-img">
         <img id="calibrate-img" src="static/img/distance_plot.png" alt="calibrate devices for the plot" />
     </div>
@@ -41,8 +43,9 @@
         })
         .then(response => response.json())
         .then(data => {
-            if (data && data.image_paths && data.image_paths.length > 0) {
+            if (data && data.image_paths && data.rank && data.image_paths.length > 0) {
                 document.getElementById("plot-img").src = data.image_paths[0];
+                document.getElementById("target_heuristic").textContent = "Rank: "+data.rank[device];
             } else {
                 document.getElementById("plot-img").src = "";
             }
@@ -65,7 +68,7 @@
                             select.appendChild(option);
                         });
                         // Set initial image
-                        document.getElementById("plot-img").src = "img/plot_" + data.devices[0] + ".png";
+                        document.getElementById("plot-img").src = "static/img/plot_" + data.devices[0] + ".png";
                     } else {
                         var option = document.createElement("option");
                         option.text = "No devices found";

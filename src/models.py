@@ -11,3 +11,7 @@ class Device(BaseModel):
 
     class Config:
         frozen = True
+
+class Rating(BaseModel):
+    device: str
+    rating: float
