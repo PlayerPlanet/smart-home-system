@@ -12,6 +12,10 @@ from .analyze_data import create_plot_from_SensorData, update_distance_parameter
 import numpy as np
 import os
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 #fastapi app
 app = FastAPI()
 app.mount("/static/", StaticFiles(directory="static/"), name="static")
@@ -107,6 +111,7 @@ async def handle_data(sensor_data: SensorData):
         status = _validate_data(sensor_data)
         mac = sensor_data.meta.get("mac")
         if mac:
+            logger.info(f"Received data from MAC: {mac}")
             calibration.add_sensor(Device(mac=mac))
         return {"status": status, "calibrate":calibration.calibrate}
 
