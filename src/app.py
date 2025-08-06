@@ -164,7 +164,7 @@ async def read_index(request: Request):
 
 @app.post("/floor")
 async def upload(image: UploadFile = File(...), metadata: str = Form(...)):
-    floor_img_path = os.path.join("static/img/",image.filename)
+    floor_img_path = os.path.join("static/img/","floorplan.png")
     imageFile = await image.read()
     metadata_dict = json.loads(metadata)
     output = _handle_floorplan(floor_img_path,metadata_dict, imageFile)

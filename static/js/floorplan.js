@@ -169,9 +169,9 @@ function drawFloorplan() {
 
     measurementLines.forEach(line => drawLine(line.p1, line.p2, false));
 
-    sensors.forEach(sensor => {
+    Object.entries(sensor_positions).forEach(([name, pos]) => {
         ctx.beginPath();
-        ctx.arc(sensor.x, sensor.y, 8, 0, 2 * Math.PI);
+        ctx.arc(pos.x, pos.y, 8, 0, 2 * Math.PI);
         ctx.fillStyle = 'red';
         ctx.fill();
     });
@@ -211,11 +211,21 @@ function addSensor(x, y) {
             activeLi.textContent = `${name}: (${x.toFixed(1)}, ${y.toFixed(1)})`;
         }
     } else {
-        // Add new sensor
-        sensors.push("new_sensor")
-        sensor_positions.new_sensor = { x, y };
-        drawFloorplan();
+        // Prompt for new sensor name
+        let name = prompt("Enter a name for the new sensor:");
+        if (!name) {
+            alert("Sensor name is required.");
+            return;
+        }
+        // Prevent duplicate names
+        if (sensors.includes(name)) {
+            alert("A sensor with this name already exists.");
+            return;
+        }
+        sensors.push(name);
+        sensor_positions[name] = { x, y };
     }
+    drawFloorplan();
 
 }
 
