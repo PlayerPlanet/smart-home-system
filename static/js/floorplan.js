@@ -7,6 +7,7 @@ const point2 = document.getElementById('point2');
 const scaleText = document.getElementById('scaleText');
 const sensorList = document.getElementById('sensor-list');
 const saveBtn = document.getElementById('save-sensors');
+const waitModal = document.getElementById("wait-modal");
 
 let floorplanImg = new Image();
 let scale = null;
@@ -56,14 +57,21 @@ document.getElementById("save-sensors").addEventListener("click", async function
     formData.append("image",imageFile, "floorplan.png");
     formData.append("metadata", JSON.stringify(data));
     // Send POST to /floorplan
-    const resp = await fetch("/floor", {
-        method: "POST",
-        body: formData
-    });
-    if (resp.ok) {
-        alert("Floorplan and sensor positions saved!");
-    } else {
-        alert("Failed to save floorplan data.");
+    waitModal.style.display = "flex";
+    try {
+        const resp = await fetch("/floor", {
+            method: "POST",
+            body: formData
+        });
+        waitModal.style.display = "none";
+        if (resp.ok) {
+            alert("Floorplan and sensor positions saved!");
+        } else {
+            alert("Failed to save floorplan data.");
+        }
+    } catch (e) {
+        waitModal.style.display = "none";
+        alert("Error saving floorplan data.");
     }
 });
 //Display uploaded file automatically:

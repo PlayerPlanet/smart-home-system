@@ -2,66 +2,53 @@
 <html>
 <head>
     <title>Upload Floorplan & Place Sensors</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        #floorplan-container { margin-top: 20px; position: relative; }
-        #floorplan-img {border: 1px solid #ccc; }
-        .sensor-dot {
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            background: red;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-        }
-        .draggable-point {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: red;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            cursor: pointer;
-            z-index: 10;
-        }
-        #sensor-list li.active {
-            background: #e0e0ff;
-        }
-        canvas {
-            border: 1px solid #ccc;
-            cursor: crosshair;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-    <a href="/"><button>back</button></a>
-    <h2>Upload Floorplan</h2>
-    <form id="upload-form" enctype="multipart/form-data" method="post" action="/upload_floorplan">
-        <input type="file" name="floorplan" accept="image/*" required>
-        <button type="submit">Upload</button>
-    </form>
-    <div>
-        <h3>Active Sensors</h3>
-        <ul id="sensor-list">
-            <li>No sensors detected</li>
-        </ul>
+    <h2 class="toolbar-e">Upload Floorplan</h2>
+    <div class="toolbar">     
+        <a href="/"><button>back</button></a>
     </div>
-    <div>
-        <label>
-            Define scale: 
-            <div id="info">Pixel-to-meter ratio: <span id="scaleText">N/A</span></div>
-        </label>
-        <button id="newMeasureBtn">Start Measuring</button>
-        <button id="measureBtn">Set distance</button>
+    <div class="container">
+        
+        <form id="upload-form" enctype="multipart/form-data" method="post" action="/upload_floorplan">
+            <input type="file" name="floorplan" accept="image/*" required>
+            <button type="submit">Upload</button>
+        </form>
+        <div>
+            <h3>Active Sensors</h3>
+            <ul id="sensor-list">
+                <li>No sensors detected</li>
+            </ul>
+        </div>
+        <div>
+            <label>
+                Define scale: 
+                <div id="info">Pixel-to-meter ratio: <span id="scaleText">N/A</span></div>
+            </label>
+            <button id="newMeasureBtn">Start Measuring</button>
+            <button id="measureBtn">Set distance</button>
+        </div>
+        <div id="floorplan-container">
+            <canvas id="floorplan-img" src="" alt="Floorplan will appear here"></canvas>
+            <div id="point1" class="draggable-point" style="display: none;"></div>
+            <div id="point2" class="draggable-point" style="display: none;"></div>
+            <!-- Sensor dots and crosshair will be dynamically added here -->
+        </div>
+        <button id="save-sensors" style="display:none;">Save Sensor Positions</button>
+        <script src="/static/js/floorplan.js"></script>
+        <div id="wait-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+            <div style="background:#fff;padding:32px 48px;border-radius:8px;box-shadow:0 2px 16px #0003;text-align:center;">
+                <div class="spinner" style="margin-bottom:16px;">
+                <div style="border:6px solid #eee;border-top:6px solid #3498db;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:auto;"></div>
+                </div>
+                <div>Running wave simulation for all sensors...<br>Please wait (1-3 minutes)</div>
+            </div>
+        </div> 
     </div>
-    <div id="floorplan-container">
-        <canvas id="floorplan-img" src="" alt="Floorplan will appear here"></canvas>
-        <div id="point1" class="draggable-point" style="display: none;"></div>
-        <div id="point2" class="draggable-point" style="display: none;"></div>
-        <!-- Sensor dots and crosshair will be dynamically added here -->
-    </div>
-    <button id="save-sensors" style="display:none;">Save Sensor Positions</button>
-    <script src="/static/js/floorplan.js"></script>
+    <style>
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
 </body>
 </html>
