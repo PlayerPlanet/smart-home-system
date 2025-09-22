@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Plot Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        #plot-img { margin-top: 20px; max-width: 600px; }
+    </style>
+</head>
+<body>
+    <h2>Select Device</h2>
+    <select id="device-select" onchange="updateImage()">
+        <option value="none">No devices</option>
+        <!-- Add more devices as needed -->
+    </select>
+    <button onclick="calibrateDevices()">calibrate devices</button>
+    <button onclick="calibrateDevices('/stop')">stop calibration</button>
+    <a href="/floor"><button>Set sensor positions</button></a>
+    <div>
+        <p id="target_heuristic"></p>
+        <img id="plot-img">
+        <img id="calibrate-img" src="static/img/distance_plot.png" alt="calibrate devices for the plot" />
+    </div>
+    <div>
+        <h3>List of active sensors</h3>
+        <ul id="sensor-list">
+            <p id="no-sensors">no sensors detected</p>
+        </ul>
+    </div>
+    <script>
+        function updateImage(device = null) {
+        device = device ? device : document.getElementById("device-select").value;
+        if (!device || device === "none") {
+            document.getElementById("plot-img").src = "";
+            return;
+        }
+        fetch("/images", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify([device])
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.image_paths && data.rank && data.image_paths.length > 0) {
+                document.getElementById("plot-img").src = data.image_paths[0];
+                document.getElementById("target_heuristic").textContent = "Rank: "+data.rank[device];
+            } else {
+                document.getElementById("plot-img").src = "";
+            }
+        });
+        }
+        function calibrateDevices(path = "") {
+        fetch("/calibrate"+path)
+        }
+        document.addEventListener("DOMContentLoaded", async function() {
+            fetch("/devices")
+                .then(response => response.json())
+                .then(data => {
+                    var select = document.getElementById("device-select");
+                    select.innerHTML = ""; // Clear any existing options
+                    if (data.devices && data.devices.length > 0) {
+                        data.devices.forEach(function(device, idx) {
+                            var option = document.createElement("option");
+                            option.value = device;
+                            option.text = device;
+                            select.appendChild(option);
+                        });
+                        // Set initial image
+                        document.getElementById("plot-img").src = "static/img/plot_" + data.devices[0] + ".png";
+                    } else {
+                        var option = document.createElement("option");
+                        option.text = "No devices found";
+                        select.appendChild(option);
+                        document.getElementById("plot-img").src = "";
+                    }
+                });
+            try {
+                const response = await fetch("/sensors");
+                const data = await response.json();
+                var li = document.getElementById("sensor-list")
+                var empty = document.getElementById("no-sensors")
+                if (data.sensors && data.sensors.length > 0) {
+                    li.innerHTML = "";
+                    data.sensors.forEach(function(sensor) {
+                        const element = document.createElement("li");
+                        element.textContent = sensor;
+                        li.appendChild(element);
+                    });
+                } else {
+                    li.innerHTML = "";
+                    li.appendChild(empty);
+                }
+            } catch (err) {
+                console.error("Failed to fetch")
+            }
+        });
+    </script>
+</body>
+</html>

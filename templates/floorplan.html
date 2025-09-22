@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload Floorplan & Place Sensors</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        #floorplan-container { margin-top: 20px; position: relative; }
+        #floorplan-img {border: 1px solid #ccc; }
+        .sensor-dot {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .draggable-point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 10;
+        }
+        #sensor-list li.active {
+            background: #e0e0ff;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+    <a href="/"><button>back</button></a>
+    <h2>Upload Floorplan</h2>
+    <form id="upload-form" enctype="multipart/form-data" method="post" action="/upload_floorplan">
+        <input type="file" name="floorplan" accept="image/*" required>
+        <button type="submit">Upload</button>
+    </form>
+    <div>
+        <h3>Active Sensors</h3>
+        <ul id="sensor-list">
+            <li>No sensors detected</li>
+        </ul>
+    </div>
+    <div>
+        <label>
+            Define scale: 
+            <div id="info">Pixel-to-meter ratio: <span id="scaleText">N/A</span></div>
+        </label>
+        <button id="newMeasureBtn">Start Measuring</button>
+        <button id="measureBtn">Set distance</button>
+    </div>
+    <div id="floorplan-container">
+        <canvas id="floorplan-img" src="" alt="Floorplan will appear here"></canvas>
+        <div id="point1" class="draggable-point" style="display: none;"></div>
+        <div id="point2" class="draggable-point" style="display: none;"></div>
+        <!-- Sensor dots and crosshair will be dynamically added here -->
+    </div>
+    <button id="save-sensors" style="display:none;">Save Sensor Positions</button>
+    <script src="/static/js/floorplan.js"></script>
+</body>
+</html>

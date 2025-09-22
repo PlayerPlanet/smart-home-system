@@ -1,0 +1,18 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:5000"
+    volumes:
+      - .:/code
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /code
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
